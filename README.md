@@ -35,32 +35,6 @@ Está diseñado bajo el paradigma **Local-First**, garantizando operatividad tot
 
 ---
 
-## 🌍 Contexto y Planteamiento del Problema
-
-### De lo Global a lo Micro
-
-| Nivel | Realidad |
-|-------|----------|
-| **🌐 Global** | La Industria 4.0 exige visibilidad total sobre los recursos. Las empresas líderes usan IA y automatización para optimizar cadenas de suministro. |
-| **🌎 Latinoamérica** | Las MiPyMEs pierden capital significativo en reposición de insumos y herramientas extraviadas por falta de sistemas de control interno. |
-| **🇻🇪 Venezuela** | Inflación elevada, tipo de cambio volátil, inestabilidad eléctrica (91% de empresas reportan fallas) e internet intermitente. El software debe ser "antifrágil": operativo sin conexión. |
-| **🏢 Barinas / Adcesa** | Adcesa Publicidad y Decoraciones enfrenta conflictos de uso de equipos, falta de trazabilidad de activos de alto valor y desabastecimiento de insumos críticos en medio de pedidos urgentes. |
-
-### Problemas Identificados en Adcesa
-
-- **Conflictos de uso**: Múltiples colaboradores requieren el mismo equipo sin reserva previa ni registro de posesión.
-- **Crisis de búsqueda**: 3–5 horas semanales perdidas localizando herramientas.
-- **Desabastecimiento**: Descubrimiento tardío de insumos agotados durante pedidos urgentes.
-- **Mantenimiento reactivo**: Falta de historial preventivo para maquinaria costosa (plotters, prensas térmicas).
-- **Registros manuales**: Uso de hojas de cálculo o chats grupales, propensos a error humano y sin actualización en tiempo real.
-
----
-
-## 🎯 Objetivos
-
-### Objetivo General
-
-Desarrollar el sistema **EcoSincro (Adcesa Edition)**, una solución de gestión transaccional de activos y flujos operativos diseñada para la gobernanza de recursos compartidos y el control de suministros críticos, optimizando la productividad y protegiendo el patrimonio institucional.
 
 ### Objetivos Específicos
 
@@ -411,12 +385,6 @@ Construye la aplicación y genera un instalador **NSIS** para Windows en la carp
 
 ## 🖥️ Uso
 
-### Credenciales de Prueba (Demo)
-
-| Rol | Email | Contraseña |
-|-----|-------|------------|
-| **Administrador** | `admin@modulo.com` | `admin123` |
-| **Usuario** | `user@modulo.com` | `user123` |
 
 > ⚠️ Estas credenciales se crean automáticamente al ejecutar la migración inicial de la base de datos.
 
@@ -476,31 +444,3 @@ Esto genera un instalador `.exe` en `release/` con:
 
 ---
 
-## 👥 Integrantes del Proyecto
-
-| Integrante | Cédula | Rol |
-|------------|--------|-----|
-| **Lías Yasser** | C.I: 31.124.722 | Desarrollador |
-| **Hernández Yessamir** | C.I: 31.226.461 | Desarrollador |
-
-### Supervisión Académica
-
-| Profesora |
-|-----------|
-| **María Acosta** |
-
-**Sub-Proyecto:** Desarrollo de Aplicaciones  
-**Sección:** FS-01  
-**Institución:** Universidad Nacional Experimental de los Llanos Occidentales "Ezequiel Zamora" (UNELLEZ)  
-**Ubicación:** Barinas, Venezuela  
-**Fecha:** Marzo 2026
-
----
-
-## 📄 Licencia
-
-Este proyecto es desarrollado con fines académicos para la UNELLEZ. Todos los derechos reservados.
-
----
-
-> **EcoSincro (Adcesa Edition)** — Transformando la gestión de recursos en una ventaja operativa estratégica.
