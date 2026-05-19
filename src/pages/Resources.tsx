@@ -10,13 +10,18 @@ export default function Resources() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'available' | 'in_use'>('all')
-  const [showAdd, setShowAdd] = useState(false)
-  const [newResource, setNewResource] = useState({
+  const [showModal, setShowModal] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [formData, setFormData] = useState({
     name: '',
     description: '',
     category: '',
     type: 'non-consumable' as 'consumable' | 'non-consumable',
     qr_code: '',
+    health_status: 'excellent' as 'excellent' | 'needs_review' | 'out_of_service',
+    initial_quantity: 0,
+    min_threshold: 5,
+    unit: 'unidades',
   })
 
   useEffect(() => {
@@ -36,6 +41,8 @@ export default function Resources() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Enter') return
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
       if (e.key.length === 1) {
         pushScanChar(e.key)
       }
@@ -56,18 +63,40 @@ export default function Resources() {
     return matchesSearch && matchesFilter
   })
 
-  const handleAdd = async () => {
-    if (!newResource.name) return
+  const openCreate = () => {
+    setEditingId(null)
+    setFormData({ name: '', description: '', category: '', type: 'non-consumable', qr_code: '', health_status: 'excellent', initial_quantity: 0, min_threshold: 5, unit: 'unidades' })
+    setShowModal(true)
+  }
+
+  const openEdit = (r: Resource) => {
+    setEditingId(r.id)
+    setFormData({
+      name: r.name,
+      description: r.description,
+      category: r.category,
+      type: r.type,
+      qr_code: r.qr_code,
+      health_status: r.health_status,
+      initial_quantity: 0,
+      min_threshold: 5,
+      unit: 'unidades',
+    })
+    setShowModal(true)
+  }
+
+  const handleSave = async () => {
+    if (!formData.name) return
     try {
-      await window.electronAPI.db.resources.create({
-        ...newResource,
-        health_status: 'excellent',
-      })
-      setShowAdd(false)
-      setNewResource({ name: '', description: '', category: '', type: 'non-consumable', qr_code: '' })
+      if (editingId !== null) {
+        await window.electronAPI.db.resources.update(editingId, formData)
+      } else {
+        await window.electronAPI.db.resources.create(formData)
+      }
+      setShowModal(false)
       await loadResources()
     } catch {
-      alert('Error al crear recurso')
+      alert('Error al guardar recurso')
     }
   }
 
@@ -104,7 +133,7 @@ export default function Resources() {
         </div>
         {user?.role === 'admin' && (
           <button
-            onClick={() => setShowAdd(true)}
+            onClick={openCreate}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             + Nuevo Recurso
@@ -178,12 +207,20 @@ export default function Resources() {
                       </button>
                     )}
                     {user?.role === 'admin' && (
-                      <button
-                        onClick={() => handleDelete(r.id)}
-                        className="px-3 py-1.5 text-xs bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
-                      >
-                        Eliminar
-                      </button>
+                      <>
+                        <button
+                          onClick={() => openEdit(r)}
+                          className="px-3 py-1.5 text-xs bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-lg transition-colors"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => handleDelete(r.id)}
+                          className="px-3 py-1.5 text-xs bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
+                        >
+                          Eliminar
+                        </button>
+                      </>
                     )}
                   </div>
                 </td>
@@ -200,56 +237,125 @@ export default function Resources() {
         </table>
       </div>
 
-      {showAdd && (
+      {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold mb-4">Nuevo Recurso</h2>
+            <h2 className="text-lg font-semibold mb-4">
+              {editingId !== null ? 'Editar Recurso' : 'Nuevo Recurso'}
+            </h2>
             <div className="space-y-3">
-              <input
-                placeholder="Nombre"
-                value={newResource.name}
-                onChange={(e) => setNewResource({ ...newResource, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              />
-              <input
-                placeholder="Descripción"
-                value={newResource.description}
-                onChange={(e) => setNewResource({ ...newResource, description: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              />
-              <input
-                placeholder="Categoría"
-                value={newResource.category}
-                onChange={(e) => setNewResource({ ...newResource, category: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              />
-              <input
-                placeholder="Código QR"
-                value={newResource.qr_code}
-                onChange={(e) => setNewResource({ ...newResource, qr_code: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              />
-              <select
-                value={newResource.type}
-                onChange={(e) => setNewResource({ ...newResource, type: e.target.value as any })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              >
-                <option value="non-consumable">No Consumible</option>
-                <option value="consumable">Consumible</option>
-              </select>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Nombre</label>
+                <input
+                  placeholder="Nombre del recurso"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Descripción</label>
+                <input
+                  placeholder="Descripción del recurso"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Categoría</label>
+                <input
+                  placeholder="Ej: "
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Código QR</label>
+                <input
+                  placeholder="Código único del recurso"
+                  value={formData.qr_code}
+                  onChange={(e) => setFormData({ ...formData, qr_code: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Tipo</label>
+                <select
+                  value={formData.type}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="non-consumable">No Consumible</option>
+                  <option value="consumable">Consumible</option>
+                </select>
+              </div>
+              {formData.type === 'consumable' && editingId === null && (
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
+                  <label className="block text-xs font-semibold text-blue-700 mb-2">📦 Stock Inicial</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Cantidad</label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Ej: 50"
+                        value={formData.initial_quantity}
+                        onChange={(e) => setFormData({ ...formData, initial_quantity: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Umbral mínimo</label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Ej: 10"
+                        value={formData.min_threshold}
+                        onChange={(e) => setFormData({ ...formData, min_threshold: Number(e.target.value) })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Unidad</label>
+                      <input
+                        placeholder="Ej: metros"
+                        value={formData.unit}
+                        onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+              {editingId !== null && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Estado de Salud</label>
+                  <select
+                    value={formData.health_status}
+                  onChange={(e) => setFormData({ ...formData, health_status: e.target.value as any })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="excellent">Excelente</option>
+                  <option value="needs_review">Requiere Revisión</option>
+                  <option value="out_of_service">Fuera de Servicio</option>
+                  </select>
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button
-                onClick={() => setShowAdd(false)}
+                onClick={() => setShowModal(false)}
                 className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
               >
                 Cancelar
               </button>
               <button
-                onClick={handleAdd}
+                onClick={handleSave}
                 className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
               >
-                Crear
+                {editingId !== null ? 'Guardar' : 'Crear'}
               </button>
             </div>
           </div>

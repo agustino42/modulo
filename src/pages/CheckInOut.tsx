@@ -47,6 +47,8 @@ export default function CheckInOut() {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Enter') return
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
       if (e.key.length === 1) pushScanChar(e.key)
     }
     window.addEventListener('keydown', handler)

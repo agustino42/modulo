@@ -1,4 +1,5 @@
 import { getDatabase, saveDatabase } from '../connection'
+import { updateStock } from './stockRepo'
 
 export interface CheckInOutLogRow {
   id: number
@@ -13,10 +14,11 @@ export interface CheckInOutLogRow {
 export function checkout(resourceId: number, userId: number, etrMinutes: number): boolean {
   const db = getDatabase()
 
-  const current = db.exec('SELECT current_user_id FROM resources WHERE id = ?', [resourceId])
+  const current = db.exec('SELECT current_user_id, type FROM resources WHERE id = ?', [resourceId])
   if (current.length === 0 || current[0].values.length === 0) return false
 
   const currentUserId = current[0].values[0][0]
+  const resourceType = current[0].values[0][1] as string
   if (currentUserId !== null) return false
 
   db.run('UPDATE resources SET current_user_id = ? WHERE id = ?', [userId, resourceId])
@@ -24,6 +26,16 @@ export function checkout(resourceId: number, userId: number, etrMinutes: number)
     'INSERT INTO checkin_checkout_log (resource_id, user_id, action, etr_minutes) VALUES (?, ?, ?, ?)',
     [resourceId, userId, 'checkout', etrMinutes],
   )
+
+  if (resourceType === 'consumable') {
+    const stock = db.exec('SELECT current_quantity FROM consumable_stock WHERE resource_id = ?', [resourceId])
+    if (stock.length > 0 && stock[0].values.length > 0) {
+      const qty = stock[0].values[0][0] as number
+      if (qty > 0) {
+        updateStock(resourceId, qty - 1)
+      }
+    }
+  }
 
   saveDatabase()
   return true

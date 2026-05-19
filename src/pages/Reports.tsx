@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import type { UsageStat, AuditLog, HealthSummary } from '../types'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
@@ -12,6 +14,8 @@ export default function Reports() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
   const [healthSummary, setHealthSummary] = useState<HealthSummary[]>([])
   const [tab, setTab] = useState<'usage' | 'audit' | 'health'>('usage')
+  const [auditPage, setAuditPage] = useState(0)
+  const AUDIT_PAGE_SIZE = 50
 
   useEffect(() => {
     loadData()
@@ -28,6 +32,71 @@ export default function Reports() {
     setHealthSummary(health)
   }
 
+  const exportUsagePDF = useCallback(() => {
+    const doc = new jsPDF()
+    doc.setFontSize(16)
+    doc.text('Reporte de Uso de Recursos', 14, 20)
+    doc.setFontSize(10)
+    doc.text(`Generado: ${new Date().toLocaleString()}`, 14, 28)
+
+    const body = usageStats.map((s, i) => [i + 1, s.resource_name, s.qr_code, String(s.total_checkouts), String(s.total_minutes_used)])
+    autoTable(doc, {
+      startY: 34,
+      head: [['#', 'Recurso', 'Código QR', 'Veces usado', 'Total minutos']],
+      body,
+    })
+
+    doc.save('reporte-uso-recursos.pdf')
+  }, [usageStats])
+
+  const exportAuditPDF = useCallback(() => {
+    const doc = new jsPDF({ orientation: 'landscape' })
+    doc.setFontSize(16)
+    doc.text('Registro de Auditoría', 14, 20)
+    doc.setFontSize(10)
+    doc.text(`Generado: ${new Date().toLocaleString()}`, 14, 28)
+
+    const body = auditLogs.map((l) => [
+      new Date(l.created_at).toLocaleString(),
+      l.user_name,
+      l.user_role,
+      l.action === 'checkout' ? 'Tomó' : 'Devolvió',
+      l.resource_name,
+      l.qr_code,
+      `${l.etr_minutes} min`,
+    ])
+    autoTable(doc, {
+      startY: 34,
+      head: [['Fecha', 'Usuario', 'Rol', 'Acción', 'Recurso', 'QR', 'ETR']],
+      body,
+      styles: { fontSize: 7 },
+    })
+
+    doc.save('reporte-auditoria.pdf')
+  }, [auditLogs])
+
+  const exportHealthPDF = useCallback(() => {
+    const doc = new jsPDF()
+    doc.setFontSize(16)
+    doc.text('Reporte de Salud de Activos', 14, 20)
+    doc.setFontSize(10)
+    doc.text(`Generado: ${new Date().toLocaleString()}`, 14, 28)
+
+    const labels: Record<string, string> = {
+      excellent: 'Excelente',
+      needs_review: 'Requiere Revisión',
+      out_of_service: 'Fuera de Servicio',
+    }
+    const body = healthSummary.map((h, i) => [i + 1, labels[h.health_status] || h.health_status, String(h.count)])
+    autoTable(doc, {
+      startY: 34,
+      head: [['#', 'Estado', 'Cantidad']],
+      body,
+    })
+
+    doc.save('reporte-salud-activos.pdf')
+  }, [healthSummary])
+
   return (
     <div className="space-y-6">
       <div>
@@ -39,7 +108,7 @@ export default function Reports() {
         {(['usage', 'audit', 'health'] as const).map((t) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => { setTab(t); setAuditPage(0) }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               tab === t
                 ? 'bg-blue-600 text-white'
@@ -53,7 +122,15 @@ export default function Reports() {
 
       {tab === 'usage' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Recursos Más Demandados</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Recursos Más Demandados</h2>
+            <button
+              onClick={exportUsagePDF}
+              className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            >
+              Exportar PDF
+            </button>
+          </div>
           {usageStats.length > 0 ? (
             <ResponsiveContainer width="100%" height={400}>
               <BarChart data={usageStats}>
@@ -94,9 +171,17 @@ export default function Reports() {
 
       {tab === 'audit' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100">
-            <h2 className="text-lg font-semibold text-gray-900">Registro Histórico de Actividad</h2>
-            <p className="text-sm text-gray-500 mt-1">Últimas 500 interacciones</p>
+          <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Registro Histórico de Actividad</h2>
+              <p className="text-sm text-gray-500 mt-1">Últimas 500 interacciones</p>
+            </div>
+            <button
+              onClick={exportAuditPDF}
+              className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            >
+              Exportar PDF
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -112,7 +197,9 @@ export default function Reports() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {auditLogs.map((log) => (
+                {auditLogs
+                  .slice(auditPage * AUDIT_PAGE_SIZE, (auditPage + 1) * AUDIT_PAGE_SIZE)
+                  .map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50">
                     <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">
                       {new Date(log.created_at).toLocaleString()}
@@ -145,11 +232,43 @@ export default function Reports() {
               </tbody>
             </table>
           </div>
+          {auditLogs.length > AUDIT_PAGE_SIZE && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100">
+              <span className="text-sm text-gray-500">
+                Mostrando {Math.min((auditPage + 1) * AUDIT_PAGE_SIZE, auditLogs.length)} de {auditLogs.length} registros
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setAuditPage(Math.max(0, auditPage - 1))}
+                  disabled={auditPage === 0}
+                  className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+                >
+                  Anterior
+                </button>
+                <button
+                  onClick={() => setAuditPage(auditPage + 1)}
+                  disabled={(auditPage + 1) * AUDIT_PAGE_SIZE >= auditLogs.length}
+                  className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {tab === 'health' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <button
+              onClick={exportHealthPDF}
+              className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+            >
+              Exportar PDF
+            </button>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Estado de Salud General</h2>
             {healthSummary.length > 0 ? (
@@ -196,6 +315,7 @@ export default function Reports() {
               )}
             </div>
           </div>
+        </div>
         </div>
       )}
     </div>

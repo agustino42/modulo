@@ -69,7 +69,7 @@ export function createUser(name: string, email: string, password: string, role: 
   }
 }
 
-export function updateUser(id: number, data: Partial<{ name: string; email: string; role: string }>): void {
+export function updateUser(id: number, data: Partial<{ name: string; email: string; role: string; password: string }>): void {
   const db = getDatabase()
   const fields: string[] = []
   const values: any[] = []
@@ -77,6 +77,11 @@ export function updateUser(id: number, data: Partial<{ name: string; email: stri
   if (data.name !== undefined) { fields.push('name = ?'); values.push(data.name) }
   if (data.email !== undefined) { fields.push('email = ?'); values.push(data.email) }
   if (data.role !== undefined) { fields.push('role = ?'); values.push(data.role) }
+  if (data.password !== undefined) {
+    const hash = bcryptjs.hashSync(data.password, 10)
+    fields.push('password_hash = ?')
+    values.push(hash)
+  }
 
   if (fields.length === 0) return
 

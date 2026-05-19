@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react'
+import { useAuthStore } from '../stores/authStore'
 import type { User } from '../types'
 
 export default function Admin() {
+  const { user: currentUser } = useAuthStore()
   const [users, setUsers] = useState<User[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'user' as 'admin' | 'user' })
+  const [passwordModal, setPasswordModal] = useState<{ user: User } | null>(null)
+  const [newPassword, setNewPassword] = useState('')
 
   const loadUsers = async () => {
     const data = await window.electronAPI.db.users.getAll()
@@ -26,6 +30,13 @@ export default function Admin() {
   const handleUpdateRole = async (id: number, role: string) => {
     await window.electronAPI.db.users.update(id, { role })
     await loadUsers()
+  }
+
+  const handlePasswordChange = async () => {
+    if (!passwordModal || !newPassword || newPassword.length < 4) return
+    await window.electronAPI.db.users.update(passwordModal.user.id, { password: newPassword })
+    setPasswordModal(null)
+    setNewPassword('')
   }
 
   return (
@@ -73,11 +84,19 @@ export default function Admin() {
                   {new Date(u.created_at).toLocaleDateString()}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {u.role === 'admin' ? 'Administrador' : 'Usuario'}
-                  </span>
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => { setPasswordModal({ user: u }); setNewPassword('') }}
+                      className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors"
+                    >
+                      Contraseña
+                    </button>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {u.role === 'admin' ? 'Administrador' : 'Usuario'}
+                    </span>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -131,6 +150,38 @@ export default function Admin() {
                 className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
               >
                 Crear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {passwordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+            <h2 className="text-lg font-semibold mb-2">Cambiar Contraseña</h2>
+            <p className="text-sm text-gray-500 mb-4">Usuario: <strong>{passwordModal.user.name}</strong></p>
+            <input
+              type="password"
+              placeholder="Nueva contraseña (mín. 4 caracteres)"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+              autoFocus
+            />
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setPasswordModal(null)}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handlePasswordChange}
+                disabled={newPassword.length < 4}
+                className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg transition-colors"
+              >
+                Guardar
               </button>
             </div>
           </div>

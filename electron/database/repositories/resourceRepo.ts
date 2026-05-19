@@ -51,15 +51,38 @@ export function getResourceById(id: number): ResourceRow | null {
   }
 }
 
-export function createResource(data: Omit<ResourceRow, 'id' | 'created_at' | 'current_user_id'>): ResourceRow {
+export function createResource(data: Omit<ResourceRow, 'id' | 'created_at' | 'current_user_id'> & {
+  initial_quantity?: number
+  min_threshold?: number
+  unit?: string
+}): ResourceRow {
   const db = getDatabase()
+
+  const finalQrCode = data.qr_code || `QR-${Date.now()}`
+  const finalData = { ...data, qr_code: finalQrCode }
+
   db.run(
     'INSERT INTO resources (name, description, category, type, qr_code, health_status) VALUES (?, ?, ?, ?, ?, ?)',
-    [data.name, data.description, data.category, data.type, data.qr_code, data.health_status],
+    [finalData.name, finalData.description, finalData.category, finalData.type, finalData.qr_code, finalData.health_status],
   )
+
   saveDatabase()
 
-  const result = db.exec('SELECT * FROM resources WHERE qr_code = ?', [data.qr_code])
+  const resourceRes = db.exec('SELECT id FROM resources WHERE qr_code = ?', [finalQrCode])
+  if (!resourceRes[0]?.values?.length) throw new Error('Error al crear recurso')
+  const resourceId = resourceRes[0].values[0][0] as number
+
+  if (data.type === 'consumable') {
+    db.run(
+      'INSERT INTO consumable_stock (resource_id, current_quantity, min_threshold, unit) VALUES (?, ?, ?, ?)',
+      [resourceId, data.initial_quantity ?? 0, data.min_threshold ?? 5, data.unit ?? 'unidades'],
+    )
+  }
+
+  saveDatabase()
+
+  const result = db.exec('SELECT * FROM resources WHERE id = ?', [resourceId])
+  if (!result[0]?.values?.length) throw new Error('Error al recuperar recurso')
   const row = result[0].values[0]
   return {
     id: row[0] as number,
