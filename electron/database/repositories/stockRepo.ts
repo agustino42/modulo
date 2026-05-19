@@ -70,11 +70,21 @@ export function getLowStockResources(): (ConsumableStockRow & { name: string; qr
   }))
 }
 
-export function getAllStock(): (ConsumableStockRow & { name: string; qr_code: string; category: string })[] {
+export interface StockMovementRow {
+  id: number
+  resource_id: number
+  quantity_change: number
+  type: 'entry' | 'exit'
+  notes: string
+  user_id: number
+  created_at: string
+}
+
+export function getAllStock(): (ConsumableStockRow & { name: string; qr_code: string; category: string; created_at: string })[] {
   const db = getDatabase()
   const result = db.exec(`
     SELECT s.id, s.resource_id, s.current_quantity, s.min_threshold, s.unit, s.updated_at,
-           r.name, r.qr_code, r.category
+           r.name, r.qr_code, r.category, r.created_at
     FROM consumable_stock s
     JOIN resources r ON r.id = s.resource_id
     ORDER BY r.name
@@ -92,6 +102,70 @@ export function getAllStock(): (ConsumableStockRow & { name: string; qr_code: st
     name: row[6] as string,
     qr_code: row[7] as string,
     category: row[8] as string,
+    created_at: row[9] as string,
+  }))
+}
+
+export function registerMovement(resourceId: number, quantityChange: number, type: 'entry' | 'exit', notes: string, userId: number): void {
+  const db = getDatabase()
+  db.run(
+    'INSERT INTO stock_movements (resource_id, quantity_change, type, notes, user_id) VALUES (?, ?, ?, ?, ?)',
+    [resourceId, quantityChange, type, notes, userId],
+  )
+  const sign = type === 'entry' ? 1 : -1
+  db.run(
+    'UPDATE consumable_stock SET current_quantity = current_quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE resource_id = ?',
+    [sign * quantityChange, resourceId],
+  )
+  saveDatabase()
+}
+
+export function getStockMovements(resourceId?: number): (StockMovementRow & { user_name: string; resource_name: string })[] {
+  const db = getDatabase()
+  let query = `
+    SELECT m.id, m.resource_id, m.quantity_change, m.type, m.notes, m.user_id, m.created_at,
+           u.name as user_name, r.name as resource_name
+    FROM stock_movements m
+    LEFT JOIN users u ON u.id = m.user_id
+    LEFT JOIN resources r ON r.id = m.resource_id
+  `
+  const params: any[] = []
+  if (resourceId !== undefined) {
+    query += ' WHERE m.resource_id = ?'
+    params.push(resourceId)
+  }
+  query += ' ORDER BY m.created_at DESC LIMIT 200'
+
+  const result = db.exec(query, params)
+  if (result.length === 0) return []
+  return result[0].values.map((row) => ({
+    id: row[0] as number,
+    resource_id: row[1] as number,
+    quantity_change: row[2] as number,
+    type: row[3] as 'entry' | 'exit',
+    notes: row[4] as string,
+    user_id: row[5] as number,
+    created_at: row[6] as string,
+    user_name: row[7] as string,
+    resource_name: row[8] as string,
+  }))
+}
+
+export function getRestockCounts(): { resource_id: number; resource_name: string; count: number }[] {
+  const db = getDatabase()
+  const result = db.exec(`
+    SELECT r.id, r.name, COUNT(a.id) as count
+    FROM resources r
+    LEFT JOIN restock_alerts a ON a.resource_id = r.id
+    WHERE r.type = 'consumable'
+    GROUP BY r.id
+    ORDER BY count DESC
+  `)
+  if (result.length === 0) return []
+  return result[0].values.map((row) => ({
+    resource_id: row[0] as number,
+    resource_name: row[1] as string,
+    count: row[2] as number,
   }))
 }
 

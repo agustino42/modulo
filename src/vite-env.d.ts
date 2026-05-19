@@ -32,6 +32,9 @@ interface ElectronAPI {
       createAlert: (data: any) => Promise<any>
       updateAlertStatus: (id: number, status: string, approvedBy: number) => Promise<boolean>
       updateStock: (resourceId: number, quantity: number) => Promise<boolean>
+      registerMovement: (data: any) => Promise<boolean>
+      getMovements: (resourceId?: number) => Promise<any[]>
+      getRestockCounts: () => Promise<any[]>
     }
     reports: {
       getUsageStats: () => Promise<any[]>

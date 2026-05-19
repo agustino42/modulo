@@ -76,6 +76,18 @@ export function runMigrations(): void {
     )
   `)
 
+  db.run(`
+    CREATE TABLE IF NOT EXISTS stock_movements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      resource_id INTEGER NOT NULL REFERENCES resources(id),
+      quantity_change REAL NOT NULL,
+      type TEXT CHECK(type IN ('entry','exit')) NOT NULL,
+      notes TEXT DEFAULT '',
+      user_id INTEGER REFERENCES users(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+
   seedIfEmpty(db)
 }
 

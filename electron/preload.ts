@@ -35,6 +35,9 @@ const api = {
         ipcRenderer.invoke('db:stock:updateAlertStatus', id, status, approvedBy),
       updateStock: (resourceId: number, quantity: number) =>
         ipcRenderer.invoke('db:stock:updateStock', resourceId, quantity),
+      registerMovement: (data: any) => ipcRenderer.invoke('db:stock:registerMovement', data),
+      getMovements: (resourceId?: number) => ipcRenderer.invoke('db:stock:getMovements', resourceId),
+      getRestockCounts: () => ipcRenderer.invoke('db:stock:getRestockCounts'),
     },
     reports: {
       getUsageStats: () => ipcRenderer.invoke('db:reports:getUsageStats'),

@@ -28,6 +28,25 @@ export interface ConsumableStock {
   name: string
   qr_code: string
   category: string
+  created_at: string
+}
+
+export interface StockMovement {
+  id: number
+  resource_id: number
+  quantity_change: number
+  type: 'entry' | 'exit'
+  notes: string
+  user_id: number
+  created_at: string
+  user_name: string
+  resource_name: string
+}
+
+export interface RestockCount {
+  resource_id: number
+  resource_name: string
+  count: number
 }
 
 export interface LowStockItem {

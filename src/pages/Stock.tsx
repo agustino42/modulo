@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts'
 import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
-import type { ConsumableStock, LowStockItem, RestockAlert } from '../types'
+import type { ConsumableStock, LowStockItem, RestockAlert, RestockCount } from '../types'
+
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 
 export default function Stock() {
   const { loadResources } = useAppStore()
@@ -10,20 +15,29 @@ export default function Stock() {
   const [stockItems, setStockItems] = useState<ConsumableStock[]>([])
   const [lowStock, setLowStock] = useState<LowStockItem[]>([])
   const [alerts, setAlerts] = useState<RestockAlert[]>([])
+  const [restockCounts, setRestockCounts] = useState<RestockCount[]>([])
   const [tab, setTab] = useState<'all' | 'low' | 'alerts'>('all')
   const [showAlertModal, setShowAlertModal] = useState(false)
   const [alertResourceId, setAlertResourceId] = useState<number | null>(null)
   const [alertNotes, setAlertNotes] = useState('')
+  const [movementModal, setMovementModal] = useState<{
+    item: ConsumableStock
+    type: 'entry' | 'exit'
+    quantity: string
+    notes: string
+  } | null>(null)
 
   const loadData = async () => {
-    const [allStock, low, allAlerts] = await Promise.all([
+    const [allStock, low, allAlerts, counts] = await Promise.all([
       window.electronAPI.db.stock.getAll(),
       window.electronAPI.db.stock.getLowStock(),
       window.electronAPI.db.stock.getAlerts(),
+      window.electronAPI.db.stock.getRestockCounts(),
     ])
     setStockItems(allStock)
     setLowStock(low)
     setAlerts(allAlerts)
+    setRestockCounts(counts)
   }
 
   useEffect(() => {
@@ -31,8 +45,18 @@ export default function Stock() {
     loadResources()
   }, [loadResources])
 
-  const handleUpdateStock = async (resourceId: number, quantity: number) => {
-    await window.electronAPI.db.stock.updateStock(resourceId, quantity)
+  const handleRegisterMovement = async () => {
+    if (!movementModal || !user) return
+    const qty = Number(movementModal.quantity)
+    if (qty <= 0) return
+    await window.electronAPI.db.stock.registerMovement({
+      resource_id: movementModal.item.resource_id,
+      quantity_change: qty,
+      type: movementModal.type,
+      notes: movementModal.notes,
+      user_id: user.id,
+    })
+    setMovementModal(null)
     await loadData()
   }
 
@@ -75,6 +99,8 @@ export default function Stock() {
     )
   }
 
+  const topRequested = [...restockCounts].filter(r => r.count > 0).slice(0, 8)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -111,73 +137,112 @@ export default function Stock() {
       </div>
 
       {tab === 'all' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Recurso</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Categoría</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Stock Actual</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Stock Mínimo</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Estado</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {stockItems.map((item) => {
-                const isLow = item.current_quantity <= item.min_threshold
-                return (
-                  <tr key={item.id} className={`hover:bg-gray-50 ${isLow ? 'bg-red-50' : ''}`}>
-                    <td className="px-4 py-3 font-medium text-gray-900">{item.name}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{item.category}</td>
-                    <td className="px-4 py-3 text-right font-mono">
-                      <span className={isLow ? 'text-red-600 font-bold' : 'text-gray-900'}>
-                        {item.current_quantity}
-                      </span>
-                      <span className="text-gray-400 text-xs ml-1">{item.unit}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono text-gray-500">{item.min_threshold}</td>
-                    <td className="px-4 py-3 text-right">
-                      {isLow ? (
-                        <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700">
-                          Stock Bajo
+        <>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Recurso</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Categoría</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Stock</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Mín.</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Solicitado</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Creado</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {stockItems.map((item) => {
+                  const isLow = item.current_quantity <= item.min_threshold
+                  const count = restockCounts.find(r => r.resource_id === item.resource_id)
+                  return (
+                    <tr key={item.id} className={`hover:bg-gray-50 ${isLow ? 'bg-red-50' : ''}`}>
+                      <td className="px-4 py-3 font-medium text-gray-900">
+                        <div className="flex items-center gap-2">
+                          <span>{item.name}</span>
+                          {isLow && <span className="w-2 h-2 rounded-full bg-red-500" />}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{item.category}</td>
+                      <td className="px-4 py-3 text-right font-mono">
+                        <span className={isLow ? 'text-red-600 font-bold' : 'text-gray-900'}>
+                          {item.current_quantity}
                         </span>
-                      ) : (
-                        <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">
-                          Normal
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            const newQty = prompt('Nueva cantidad:', String(item.current_quantity))
-                            if (newQty !== null) handleUpdateStock(item.resource_id, Number(newQty))
-                          }}
-                          className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
-                        >
-                          Ajustar
-                        </button>
-                        {isLow && user?.role === 'admin' && (
-                          <button
-                            onClick={() => {
-                              setAlertResourceId(item.resource_id)
-                              setShowAlertModal(true)
-                            }}
-                            className="px-3 py-1.5 text-xs bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-colors"
-                          >
-                            Alertar
-                          </button>
+                        <span className="text-gray-400 text-xs ml-1">{item.unit}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-gray-500">{item.min_threshold}</td>
+                      <td className="px-4 py-3 text-right font-mono text-gray-500">
+                        {count && count.count > 0 ? (
+                          <span className="text-blue-600 font-semibold">{count.count}x</span>
+                        ) : (
+                          <span className="text-gray-300">0</span>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-500">
+                        {new Date(item.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => setMovementModal({
+                              item, type: 'entry', quantity: '', notes: '',
+                            })}
+                            className="p-1.5 text-xs bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-lg transition-colors"
+                            title="Entrada de stock"
+                          >
+                            +📦
+                          </button>
+                          <button
+                            onClick={() => setMovementModal({
+                              item, type: 'exit', quantity: '', notes: '',
+                            })}
+                            className="p-1.5 text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-600 rounded-lg transition-colors"
+                            title="Salida de stock"
+                          >
+                            -📦
+                          </button>
+                          {isLow && user?.role === 'admin' && (
+                            <button
+                              onClick={() => {
+                                setAlertResourceId(item.resource_id)
+                                setShowAlertModal(true)
+                              }}
+                              className="p-1.5 text-xs bg-orange-100 hover:bg-orange-200 text-orange-600 rounded-lg transition-colors"
+                              title="Alertar reposición"
+                            >
+                              🔔
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {topRequested.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase mb-4">
+                Recursos más solicitados
+              </h2>
+              <ResponsiveContainer width="100%" height={Math.max(150, topRequested.length * 50)}>
+                <BarChart
+                  data={topRequested}
+                  layout="vertical"
+                  margin={{ top: 0, right: 40, left: 80, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis type="number" />
+                  <YAxis type="category" dataKey="resource_name" tick={{ fontSize: 12 }} width={70} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]} name="Veces solicitado" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </>
       )}
 
       {tab === 'low' && (
@@ -264,6 +329,61 @@ export default function Stock() {
               No hay alertas de reposición
             </div>
           )}
+        </div>
+      )}
+
+      {movementModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+            <h2 className="text-lg font-semibold mb-1">
+              {movementModal.type === 'entry' ? 'Entrada de Stock' : 'Salida de Stock'}
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Recurso: <strong>{movementModal.item.name}</strong> ({movementModal.item.current_quantity} {movementModal.item.unit} actuales)
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Cantidad</label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="Ej: 10"
+                  value={movementModal.quantity}
+                  onChange={(e) => setMovementModal({ ...movementModal, quantity: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Nota (opcional)</label>
+                <input
+                  placeholder={movementModal.type === 'entry' ? 'Ej: Compra a proveedor' : 'Ej: Uso en proyecto X'}
+                  value={movementModal.notes}
+                  onChange={(e) => setMovementModal({ ...movementModal, notes: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setMovementModal(null)}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRegisterMovement}
+                disabled={!movementModal.quantity || Number(movementModal.quantity) <= 0}
+                className={`px-4 py-2 text-sm text-white rounded-lg transition-colors ${
+                  movementModal.type === 'entry'
+                    ? 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-yellow-600 hover:bg-yellow-700'
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                {movementModal.type === 'entry' ? 'Registrar Entrada' : 'Registrar Salida'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

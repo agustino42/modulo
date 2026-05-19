@@ -102,6 +102,12 @@ function registerIpcHandlers() {
   })
   ipcMain.handle('db:stock:getAll', () => stockRepo.getAllStock())
   ipcMain.handle('db:stock:getLowStock', () => stockRepo.getLowStockResources())
+  ipcMain.handle('db:stock:registerMovement', (_e, data) => {
+    stockRepo.registerMovement(data.resource_id, data.quantity_change, data.type, data.notes, data.user_id)
+    return true
+  })
+  ipcMain.handle('db:stock:getMovements', (_e, resourceId?: number) => stockRepo.getStockMovements(resourceId))
+  ipcMain.handle('db:stock:getRestockCounts', () => stockRepo.getRestockCounts())
 
   // Reports
   ipcMain.handle('db:reports:getUsageStats', () => reportRepo.getUsageStats())
