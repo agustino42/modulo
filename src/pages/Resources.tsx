@@ -1,8 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
+import { useKeyboardShortcut } from '../hooks/useKeyboardShortcut'
+import Pagination from '../components/ui/Pagination'
 import type { Resource } from '../types'
+
+const PAGE_SIZE = 25
 
 export default function Resources() {
   const { resources, loadResources, pushScanChar, resetScanBuffer } = useAppStore()
@@ -12,6 +16,8 @@ export default function Resources() {
   const [filter, setFilter] = useState<'all' | 'available' | 'in_use'>('all')
   const [showModal, setShowModal] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(0)
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -25,7 +31,8 @@ export default function Resources() {
   })
 
   useEffect(() => {
-    loadResources()
+    setLoading(true)
+    loadResources().finally(() => setLoading(false))
 
     const handler = (e: CustomEvent) => {
       const resource = e.detail as Resource
@@ -62,16 +69,18 @@ export default function Resources() {
       (filter === 'in_use' && r.current_user_id !== null)
     return matchesSearch && matchesFilter
   })
+  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   const openCreate = () => {
     setEditingId(null)
     setFormData({ name: '', description: '', category: '', type: 'non-consumable', qr_code: '', health_status: 'excellent', initial_quantity: 0, min_threshold: 5, unit: 'unidades' })
     setShowModal(true)
   }
+  useKeyboardShortcut('n', openCreate, [])
 
-  const openEdit = (r: Resource) => {
+  const openEdit = async (r: Resource) => {
     setEditingId(r.id)
-    setFormData({
+    const defaults = {
       name: r.name,
       description: r.description,
       category: r.category,
@@ -81,7 +90,15 @@ export default function Resources() {
       initial_quantity: 0,
       min_threshold: 5,
       unit: 'unidades',
-    })
+    }
+    if (r.type === 'consumable') {
+      const stock = await window.electronAPI.db.stock.getByResourceId(r.id)
+      if (stock) {
+        defaults.min_threshold = stock.min_threshold
+        defaults.unit = stock.unit
+      }
+    }
+    setFormData(defaults)
     setShowModal(true)
   }
 
@@ -90,6 +107,12 @@ export default function Resources() {
     try {
       if (editingId !== null) {
         await window.electronAPI.db.resources.update(editingId, formData)
+        if (formData.type === 'consumable') {
+          await window.electronAPI.db.stock.updateStockConfig(editingId, {
+            min_threshold: formData.min_threshold,
+            unit: formData.unit,
+          })
+        }
       } else {
         await window.electronAPI.db.resources.create(formData)
       }
@@ -145,13 +168,13 @@ export default function Resources() {
         <input
           type="text"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(0) }}
           placeholder="Buscar por nombre, código QR o categoría..."
           className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
         />
         <select
           value={filter}
-          onChange={(e) => setFilter(e.target.value as any)}
+          onChange={(e) => { setFilter(e.target.value as any); setPage(0) }}
           className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
         >
           <option value="all">Todos</option>
@@ -161,80 +184,87 @@ export default function Resources() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Código QR</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Nombre</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Categoría</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Tipo</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Estado</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Salud</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Acción</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {filtered.map((r) => (
-              <tr key={r.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3 font-mono text-sm text-gray-600">{r.qr_code}</td>
-                <td className="px-4 py-3 font-medium text-gray-900">{r.name}</td>
-                <td className="px-4 py-3 text-sm text-gray-600">{r.category}</td>
-                <td className="px-4 py-3 text-sm text-gray-600">
-                  <span className={`px-2 py-0.5 text-xs rounded-full ${
-                    r.type === 'consumable' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
-                  }`}>
-                    {r.type === 'consumable' ? 'Consumible' : 'No Consumible'}
-                  </span>
-                </td>
-                <td className="px-4 py-3">{statusBadge(r)}</td>
-                <td className="px-4 py-3">{healthBadge(r.health_status)}</td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    {r.current_user_id === null && (
-                      <button
-                        onClick={() => navigate(`/checkinout?resourceId=${r.id}`)}
-                        className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                      >
-                        Tomar
-                      </button>
-                    )}
-                    {r.current_user_id !== null && (
-                      <button
-                        onClick={() => navigate(`/checkinout?resourceId=${r.id}`)}
-                        className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                      >
-                        Devolver
-                      </button>
-                    )}
-                    {user?.role === 'admin' && (
-                      <>
-                        <button
-                          onClick={() => openEdit(r)}
-                          className="px-3 py-1.5 text-xs bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-lg transition-colors"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleDelete(r.id)}
-                          className="px-3 py-1.5 text-xs bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
-                        >
-                          Eliminar
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </td>
+        {loading ? (
+          <div className="flex items-center justify-center h-48">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Código QR</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Nombre</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Categoría</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Tipo</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Estado</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Salud</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Acción</th>
               </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                  No se encontraron recursos
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {paginated.map((r) => (
+                <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 font-mono text-sm text-gray-600">{r.qr_code}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900">{r.name}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{r.category}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    <span className={`px-2 py-0.5 text-xs rounded-full ${
+                      r.type === 'consumable' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      {r.type === 'consumable' ? 'Consumible' : 'No Consumible'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">{statusBadge(r)}</td>
+                  <td className="px-4 py-3">{healthBadge(r.health_status)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      {r.current_user_id === null && (
+                        <button
+                          onClick={() => navigate(`/checkinout?resourceId=${r.id}`)}
+                          className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                        >
+                          Tomar
+                        </button>
+                      )}
+                      {r.current_user_id !== null && (
+                        <button
+                          onClick={() => navigate(`/checkinout?resourceId=${r.id}`)}
+                          className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                        >
+                          Devolver
+                        </button>
+                      )}
+                      {user?.role === 'admin' && (
+                        <>
+                          <button
+                            onClick={() => openEdit(r)}
+                            className="px-3 py-1.5 text-xs bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-lg transition-colors"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => handleDelete(r.id)}
+                            className="px-3 py-1.5 text-xs bg-red-100 hover:bg-red-200 text-red-600 rounded-lg transition-colors"
+                          >
+                            Eliminar
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {paginated.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                    No se encontraron recursos
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+        <Pagination currentPage={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </div>
 
       {showModal && (
@@ -291,9 +321,9 @@ export default function Resources() {
                   <option value="consumable">Consumible</option>
                 </select>
               </div>
-              {formData.type === 'consumable' && editingId === null && (
+              {formData.type === 'consumable' && (
                 <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
-                  <label className="block text-xs font-semibold text-blue-700 mb-2">📦 Stock Inicial</label>
+                  <label className="block text-xs font-semibold text-blue-700 mb-2">📦 {editingId === null ? 'Stock Inicial' : 'Configuración de Stock'}</label>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="block text-xs text-gray-500 mb-1">Cantidad</label>

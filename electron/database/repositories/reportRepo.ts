@@ -1,16 +1,21 @@
 import { getDatabase } from '../connection'
 
-export function getUsageStats() {
+export function getUsageStats(dateFrom?: string, dateTo?: string) {
   const db = getDatabase()
+  const conditions: string[] = []
+  const params: any[] = []
+  if (dateFrom) { conditions.push('l.created_at >= ?'); params.push(dateFrom) }
+  if (dateTo) { conditions.push('l.created_at <= ?'); params.push(dateTo + 'T23:59:59') }
+  const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : ''
   const result = db.exec(`
     SELECT r.name as resource_name, r.qr_code,
            COUNT(CASE WHEN l.action = 'checkout' THEN 1 END) as total_checkouts,
            SUM(CASE WHEN l.action = 'checkout' THEN l.etr_minutes ELSE 0 END) as total_minutes_used
     FROM resources r
-    LEFT JOIN checkin_checkout_log l ON l.resource_id = r.id
+    LEFT JOIN checkin_checkout_log l ON l.resource_id = r.id ${whereClause}
     GROUP BY r.id
     ORDER BY total_checkouts DESC
-  `)
+  `, params)
 
   if (result.length === 0) return []
 
@@ -22,8 +27,13 @@ export function getUsageStats() {
   }))
 }
 
-export function getAuditLogs() {
+export function getAuditLogs(dateFrom?: string, dateTo?: string) {
   const db = getDatabase()
+  const conditions: string[] = []
+  const params: any[] = []
+  if (dateFrom) { conditions.push('l.created_at >= ?'); params.push(dateFrom) }
+  if (dateTo) { conditions.push('l.created_at <= ?'); params.push(dateTo + 'T23:59:59') }
+  const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : ''
   const result = db.exec(`
     SELECT l.id, l.action, l.etr_minutes, l.created_at,
            u.name as user_name, u.role,
@@ -31,9 +41,10 @@ export function getAuditLogs() {
     FROM checkin_checkout_log l
     LEFT JOIN users u ON u.id = l.user_id
     LEFT JOIN resources r ON r.id = l.resource_id
+    ${whereClause}
     ORDER BY l.created_at DESC
     LIMIT 500
-  `)
+  `, params)
 
   if (result.length === 0) return []
 

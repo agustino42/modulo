@@ -28,6 +28,7 @@ export default function Admin() {
   }
 
   const handleUpdateRole = async (id: number, role: string) => {
+    if (!confirm(`¿Cambiar el rol de este usuario a "${role === 'admin' ? 'Administrador' : 'Usuario'}"?`)) return
     await window.electronAPI.db.users.update(id, { role })
     await loadUsers()
   }
@@ -37,6 +38,20 @@ export default function Admin() {
     await window.electronAPI.db.users.update(passwordModal.user.id, { password: newPassword })
     setPasswordModal(null)
     setNewPassword('')
+  }
+
+  const handleBackup = async () => {
+    const ok = await window.electronAPI.db.backup.exportDb()
+    if (ok) alert('Copia de seguridad creada con éxito')
+  }
+
+  const handleRestore = async () => {
+    if (!confirm('¿Restaurar base de datos? Se perderán los datos actuales. La app se cerrará automáticamente.')) return
+    const ok = await window.electronAPI.db.backup.importDb()
+    if (ok) {
+      alert('Base de datos restaurada. La aplicación se cerrará.')
+      window.close()
+    }
   }
 
   return (
@@ -187,6 +202,17 @@ export default function Admin() {
           </div>
         </div>
       )}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Base de Datos</h2>
+        <div className="flex gap-3">
+          <button onClick={handleBackup} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors">
+            Exportar Backup
+          </button>
+          <button onClick={handleRestore} className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm transition-colors">
+            Restaurar Backup
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

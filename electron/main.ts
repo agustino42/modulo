@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, Notification } from 'electron'
 import path from 'path'
-import { initDatabase, closeDatabase } from './database/connection'
+import fs from 'fs'
+import { initDatabase, closeDatabase, saveDatabase, getDbPath } from './database/connection'
 import { runMigrations } from './database/migrate'
 import * as userRepo from './database/repositories/userRepo'
 import * as resourceRepo from './database/repositories/resourceRepo'
@@ -101,17 +102,54 @@ function registerIpcHandlers() {
     return true
   })
   ipcMain.handle('db:stock:getAll', () => stockRepo.getAllStock())
+  ipcMain.handle('db:stock:getByResourceId', (_e, resourceId: number) => stockRepo.getStockByResourceId(resourceId))
+  ipcMain.handle('db:stock:updateStockConfig', (_e, resourceId: number, data: { min_threshold?: number; unit?: string }) => {
+    stockRepo.updateStockConfig(resourceId, data)
+    return true
+  })
   ipcMain.handle('db:stock:getLowStock', () => stockRepo.getLowStockResources())
   ipcMain.handle('db:stock:registerMovement', (_e, data) => {
-    stockRepo.registerMovement(data.resource_id, data.quantity_change, data.type, data.notes, data.user_id)
-    return true
+    return stockRepo.registerMovement(data.resource_id, data.quantity_change, data.type, data.notes, data.user_id)
   })
   ipcMain.handle('db:stock:getMovements', (_e, resourceId?: number) => stockRepo.getStockMovements(resourceId))
   ipcMain.handle('db:stock:getRestockCounts', () => stockRepo.getRestockCounts())
 
+  // Notifications
+  ipcMain.handle('db:notify', (_e, title: string, body: string) => {
+    if (Notification.isSupported()) {
+      new Notification({ title, body }).show()
+    }
+    return true
+  })
+
+  // Database backup / restore
+  ipcMain.handle('db:backup', async () => {
+    const { filePath: dest } = await dialog.showSaveDialog(mainWindow!, {
+      defaultPath: `modulo-gestion-backup-${Date.now()}.db`,
+      filters: [{ name: 'SQLite Database', extensions: ['db'] }],
+    })
+    if (!dest) return false
+    saveDatabase()
+    fs.copyFileSync(getDbPath(), dest)
+    return true
+  })
+  ipcMain.handle('db:restore', async () => {
+    const { filePaths } = await dialog.showOpenDialog(mainWindow!, {
+      filters: [{ name: 'SQLite Database', extensions: ['db'] }],
+      properties: ['openFile'],
+    })
+    if (!filePaths?.length) return false
+    const src = filePaths[0]
+    const dbDir = path.dirname(getDbPath())
+    const backupPath = path.join(dbDir, `modulo-gestion.db.restore-${Date.now()}`)
+    fs.copyFileSync(getDbPath(), backupPath)
+    fs.copyFileSync(src, getDbPath())
+    return true
+  })
+
   // Reports
-  ipcMain.handle('db:reports:getUsageStats', () => reportRepo.getUsageStats())
-  ipcMain.handle('db:reports:getAuditLogs', () => reportRepo.getAuditLogs())
+  ipcMain.handle('db:reports:getUsageStats', (_e, dateFrom?: string, dateTo?: string) => reportRepo.getUsageStats(dateFrom, dateTo))
+  ipcMain.handle('db:reports:getAuditLogs', (_e, dateFrom?: string, dateTo?: string) => reportRepo.getAuditLogs(dateFrom, dateTo))
   ipcMain.handle('db:reports:getHealthSummary', () => reportRepo.getHealthSummary())
   ipcMain.handle('db:reports:getDashboardStats', () => reportRepo.getDashboardStats())
 }

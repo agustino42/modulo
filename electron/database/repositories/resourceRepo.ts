@@ -119,6 +119,11 @@ export function updateResource(id: number, data: Partial<ResourceRow>): void {
 
 export function deleteResource(id: number): void {
   const db = getDatabase()
+  db.run('DELETE FROM stock_movements WHERE resource_id = ?', [id])
+  db.run('DELETE FROM restock_alerts WHERE resource_id = ?', [id])
+  db.run('DELETE FROM checkin_checkout_log WHERE resource_id = ?', [id])
+  db.run('DELETE FROM incidents WHERE resource_id = ?', [id])
+  db.run('DELETE FROM consumable_stock WHERE resource_id = ?', [id])
   db.run('DELETE FROM resources WHERE id = ?', [id])
   saveDatabase()
 }

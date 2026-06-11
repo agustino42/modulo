@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
+import Pagination from '../components/ui/Pagination'
 import type { Incident } from '../types'
+
+const PAGE_SIZE = 25
 
 export default function Incidents() {
   const { resources, loadResources } = useAppStore()
   const { user } = useAuthStore()
 
   const [incidents, setIncidents] = useState<Incident[]>([])
+  const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(0)
   const [form, setForm] = useState({
     resource_id: 0,
     description: '',
@@ -21,8 +27,8 @@ export default function Incidents() {
   }
 
   useEffect(() => {
-    loadIncidents()
-    loadResources()
+    setLoading(true)
+    Promise.all([loadIncidents(), loadResources()]).finally(() => setLoading(false))
   }, [loadResources])
 
   const handleCreate = async () => {
@@ -73,6 +79,13 @@ export default function Incidents() {
     ? incidents
     : incidents.filter((i) => i.status === 'open' || i.status === 'in_progress')
 
+  const filtered = filteredByRole.filter((i) => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    return i.resource_name.toLowerCase().includes(q) || i.description.toLowerCase().includes(q) || i.user_name.toLowerCase().includes(q)
+  })
+  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -88,75 +101,90 @@ export default function Incidents() {
         </button>
       </div>
 
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => { setSearch(e.target.value); setPage(0) }}
+        placeholder="Buscar por recurso, descripción o usuario..."
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+      />
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Recurso</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Descripción</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Reportado por</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Severidad</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Estado</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Fecha</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Acción</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {filteredByRole.map((inc) => (
-              <tr key={inc.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-900">{inc.resource_name}</td>
-                <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">{inc.description}</td>
-                <td className="px-4 py-3 text-sm text-gray-600">{inc.user_name}</td>
-                <td className="px-4 py-3">{severityBadge(inc.severity)}</td>
-                <td className="px-4 py-3">{statusBadge(inc.status)}</td>
-                <td className="px-4 py-3 text-sm text-gray-500">
-                  {new Date(inc.created_at).toLocaleDateString()}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {user?.role === 'admin' && inc.status === 'open' && (
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => handleUpdateStatus(inc.id, 'in_progress')}
-                        className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                      >
-                        En Progreso
-                      </button>
+        {loading ? (
+          <div className="flex items-center justify-center h-48">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          </div>
+        ) : (
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Recurso</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Descripción</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Reportado por</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Severidad</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Estado</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase">Acción</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {paginated.map((inc) => (
+                <tr key={inc.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-900">{inc.resource_name}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">{inc.description}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{inc.user_name}</td>
+                  <td className="px-4 py-3">{severityBadge(inc.severity)}</td>
+                  <td className="px-4 py-3">{statusBadge(inc.status)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-500">
+                    {new Date(inc.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {user?.role === 'admin' && inc.status === 'open' && (
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleUpdateStatus(inc.id, 'in_progress')}
+                          className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                        >
+                          En Progreso
+                        </button>
+                        <button
+                          onClick={() => handleUpdateStatus(inc.id, 'resolved')}
+                          className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                        >
+                          Resolver
+                        </button>
+                      </div>
+                    )}
+                    {user?.role === 'admin' && inc.status === 'in_progress' && (
                       <button
                         onClick={() => handleUpdateStatus(inc.id, 'resolved')}
                         className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
                       >
                         Resolver
                       </button>
-                    </div>
-                  )}
-                  {user?.role === 'admin' && inc.status === 'in_progress' && (
-                    <button
-                      onClick={() => handleUpdateStatus(inc.id, 'resolved')}
-                      className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                    >
-                      Resolver
-                    </button>
-                  )}
-                  {user?.role === 'admin' && inc.status === 'resolved' && (
-                    <button
-                      onClick={() => handleUpdateStatus(inc.id, 'closed')}
-                      className="px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
-                    >
-                      Cerrar
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {filteredByRole.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
-                  No hay incidencias reportadas
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                    )}
+                    {user?.role === 'admin' && inc.status === 'resolved' && (
+                      <button
+                        onClick={() => handleUpdateStatus(inc.id, 'closed')}
+                        className="px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                      >
+                        Cerrar
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {paginated.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                    No hay incidencias reportadas
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+        <Pagination currentPage={page} totalItems={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
       </div>
 
       {showCreate && (

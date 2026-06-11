@@ -27,6 +27,10 @@ export async function initDatabase(): Promise<void> {
   db.run('PRAGMA foreign_keys = ON')
 }
 
+export function getDbPath(): string {
+  return dbPath
+}
+
 export function getDatabase(): SqlJsDatabase {
   if (!db) {
     throw new Error('Database not initialized. Call initDatabase() first.')

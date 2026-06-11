@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
@@ -9,6 +9,7 @@ export default function CheckInOut() {
   const navigate = useNavigate()
   const { resources, loadResources, pushScanChar, resetScanBuffer } = useAppStore()
   const { user } = useAuthStore()
+  const messageTimer = useRef<ReturnType<typeof setTimeout>>()
 
   const preselectedId = searchParams.get('resourceId')
   const [selectedId, setSelectedId] = useState<number | null>(
@@ -18,7 +19,12 @@ export default function CheckInOut() {
   const [customEtr, setCustomEtr] = useState('')
   const [useCustomEtr, setUseCustomEtr] = useState(false)
   const [logs, setLogs] = useState<CheckInOutLog[]>([])
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [message, setMessageState] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const setMessage = (msg: typeof message) => {
+    clearTimeout(messageTimer.current)
+    setMessageState(msg)
+    if (msg) messageTimer.current = setTimeout(() => setMessageState(null), 5000)
+  }
 
   const selectedResource = resources.find((r) => r.id === selectedId) ?? null
 
@@ -63,8 +69,8 @@ export default function CheckInOut() {
   const handleCheckout = async () => {
     if (!selectedResource || !user) return
     const etrMinutes = useCustomEtr ? Number(customEtr) : etr
-    if (etrMinutes <= 0) {
-      setMessage({ type: 'error', text: 'Debes definir un tiempo estimado de retorno' })
+    if (!etrMinutes || etrMinutes <= 0) {
+      setMessage({ type: 'error', text: 'Debes definir un tiempo estimado de retorno válido' })
       return
     }
 

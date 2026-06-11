@@ -11,6 +11,28 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadDashboard()
+    const checkAlerts = async () => {
+      try {
+        const [lowStock, alerts] = await Promise.all([
+          window.electronAPI.db.stock.getLowStock(),
+          window.electronAPI.db.stock.getAlerts(),
+        ])
+        const pendingAlerts = alerts.filter((a: any) => a.status === 'pending')
+        if (lowStock.length > 0) {
+          window.electronAPI.db.notify(
+            'Stock Bajo',
+            `${lowStock.length} recurso(s) con stock por debajo del mínimo`
+          )
+        }
+        if (pendingAlerts.length > 0) {
+          window.electronAPI.db.notify(
+            'Alertas Pendientes',
+            `${pendingAlerts.length} alerta(s) de reposición sin atender`
+          )
+        }
+      } catch {}
+    }
+    checkAlerts()
   }, [loadDashboard])
 
   if (!dashboardStats) {

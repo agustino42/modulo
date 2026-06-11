@@ -29,6 +29,8 @@ const api = {
     stock: {
       getAlerts: () => ipcRenderer.invoke('db:stock:getAlerts'),
       getAll: () => ipcRenderer.invoke('db:stock:getAll'),
+      getByResourceId: (resourceId: number) => ipcRenderer.invoke('db:stock:getByResourceId', resourceId),
+      updateStockConfig: (resourceId: number, data: any) => ipcRenderer.invoke('db:stock:updateStockConfig', resourceId, data),
       getLowStock: () => ipcRenderer.invoke('db:stock:getLowStock'),
       createAlert: (data: any) => ipcRenderer.invoke('db:stock:createAlert', data),
       updateAlertStatus: (id: number, status: string, approvedBy: number) =>
@@ -39,9 +41,14 @@ const api = {
       getMovements: (resourceId?: number) => ipcRenderer.invoke('db:stock:getMovements', resourceId),
       getRestockCounts: () => ipcRenderer.invoke('db:stock:getRestockCounts'),
     },
+    notify: (title: string, body: string) => ipcRenderer.invoke('db:notify', title, body),
+    backup: {
+      exportDb: () => ipcRenderer.invoke('db:backup'),
+      importDb: () => ipcRenderer.invoke('db:restore'),
+    },
     reports: {
-      getUsageStats: () => ipcRenderer.invoke('db:reports:getUsageStats'),
-      getAuditLogs: () => ipcRenderer.invoke('db:reports:getAuditLogs'),
+      getUsageStats: (dateFrom?: string, dateTo?: string) => ipcRenderer.invoke('db:reports:getUsageStats', dateFrom, dateTo),
+      getAuditLogs: (dateFrom?: string, dateTo?: string) => ipcRenderer.invoke('db:reports:getAuditLogs', dateFrom, dateTo),
       getHealthSummary: () => ipcRenderer.invoke('db:reports:getHealthSummary'),
       getDashboardStats: () => ipcRenderer.invoke('db:reports:getDashboardStats'),
     },

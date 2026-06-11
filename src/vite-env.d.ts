@@ -28,6 +28,8 @@ interface ElectronAPI {
     stock: {
       getAlerts: () => Promise<any[]>
       getAll: () => Promise<any[]>
+      getByResourceId: (resourceId: number) => Promise<any>
+      updateStockConfig: (resourceId: number, data: any) => Promise<boolean>
       getLowStock: () => Promise<any[]>
       createAlert: (data: any) => Promise<any>
       updateAlertStatus: (id: number, status: string, approvedBy: number) => Promise<boolean>
@@ -36,9 +38,14 @@ interface ElectronAPI {
       getMovements: (resourceId?: number) => Promise<any[]>
       getRestockCounts: () => Promise<any[]>
     }
+    notify: (title: string, body: string) => Promise<boolean>
+    backup: {
+      exportDb: () => Promise<boolean>
+      importDb: () => Promise<boolean>
+    },
     reports: {
-      getUsageStats: () => Promise<any[]>
-      getAuditLogs: () => Promise<any[]>
+      getUsageStats: (dateFrom?: string, dateTo?: string) => Promise<any[]>
+      getAuditLogs: (dateFrom?: string, dateTo?: string) => Promise<any[]>
       getHealthSummary: () => Promise<any[]>
       getDashboardStats: () => Promise<any>
     }

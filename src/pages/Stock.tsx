@@ -17,6 +17,8 @@ export default function Stock() {
   const [alerts, setAlerts] = useState<RestockAlert[]>([])
   const [restockCounts, setRestockCounts] = useState<RestockCount[]>([])
   const [tab, setTab] = useState<'all' | 'low' | 'alerts'>('all')
+  const [searchStock, setSearchStock] = useState('')
+  const [loadingStock, setLoadingStock] = useState(true)
   const [showAlertModal, setShowAlertModal] = useState(false)
   const [alertResourceId, setAlertResourceId] = useState<number | null>(null)
   const [alertNotes, setAlertNotes] = useState('')
@@ -26,6 +28,7 @@ export default function Stock() {
     quantity: string
     notes: string
   } | null>(null)
+  const [movementError, setMovementError] = useState('')
 
   const loadData = async () => {
     const [allStock, low, allAlerts, counts] = await Promise.all([
@@ -38,25 +41,39 @@ export default function Stock() {
     setLowStock(low)
     setAlerts(allAlerts)
     setRestockCounts(counts)
+    if (low.length > 0) {
+      window.electronAPI.db.notify('Stock Bajo', `${low.length} recurso(s) necesitan reposición`)
+    }
   }
 
   useEffect(() => {
-    loadData()
-    loadResources()
+    setLoadingStock(true)
+    Promise.all([loadData(), loadResources()]).finally(() => setLoadingStock(false))
   }, [loadResources])
 
   const handleRegisterMovement = async () => {
     if (!movementModal || !user) return
     const qty = Number(movementModal.quantity)
-    if (qty <= 0) return
-    await window.electronAPI.db.stock.registerMovement({
+    if (!qty || qty <= 0) {
+      setMovementError('La cantidad debe ser un número mayor a 0')
+      return
+    }
+    if (movementModal.type === 'exit' && !confirm(`¿Registrar salida de ${qty} ${movementModal.item.unit} de "${movementModal.item.name}"?`)) return
+    const success = await window.electronAPI.db.stock.registerMovement({
       resource_id: movementModal.item.resource_id,
       quantity_change: qty,
       type: movementModal.type,
       notes: movementModal.notes,
       user_id: user.id,
     })
+    if (!success) {
+      setMovementError(movementModal.type === 'exit'
+        ? 'Stock insuficiente para registrar esta salida'
+        : 'Error al registrar movimiento')
+      return
+    }
     setMovementModal(null)
+    setMovementError('')
     await loadData()
   }
 
@@ -129,7 +146,7 @@ export default function Stock() {
             )}
             {t === 'alerts' && (
               <span className="ml-2 bg-orange-500 text-white px-1.5 py-0.5 text-xs rounded-full">
-                {alerts.length}
+                {alerts.filter(a => a.status === 'pending' || a.status === 'in_procurement').length}
               </span>
             )}
           </button>
@@ -138,7 +155,38 @@ export default function Stock() {
 
       {tab === 'all' && (
         <>
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={searchStock}
+              onChange={(e) => setSearchStock(e.target.value)}
+              placeholder="Buscar por nombre o categoría..."
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+            <button
+              onClick={() => {
+                const rows = [['Recurso', 'Categoría', 'Stock', 'Mín.', 'Unidad']]
+                stockItems.forEach(item => rows.push([item.name, item.category, String(item.current_quantity), String(item.min_threshold), item.unit]))
+                const csv = rows.map(r => r.join(',')).join('\n')
+                const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url; a.download = 'stock.csv'; a.click()
+                URL.revokeObjectURL(url)
+              }}
+              className="px-3 py-2 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors whitespace-nowrap"
+            >
+              Exportar CSV
+            </button>
+          </div>
+
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            {loadingStock ? (
+              <div className="flex items-center justify-center h-48">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              </div>
+            ) : (
+            <>
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
@@ -152,7 +200,11 @@ export default function Stock() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {stockItems.map((item) => {
+                {stockItems.filter(item => {
+                  if (!searchStock) return true
+                  const q = searchStock.toLowerCase()
+                  return item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q)
+                }).map((item) => {
                   const isLow = item.current_quantity <= item.min_threshold
                   const count = restockCounts.find(r => r.resource_id === item.resource_id)
                   return (
@@ -184,18 +236,24 @@ export default function Stock() {
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
-                            onClick={() => setMovementModal({
-                              item, type: 'entry', quantity: '', notes: '',
-                            })}
+                            onClick={() => {
+                              setMovementError('')
+                              setMovementModal({
+                                item, type: 'entry', quantity: '', notes: '',
+                              })
+                            }}
                             className="p-1.5 text-xs bg-blue-100 hover:bg-blue-200 text-blue-600 rounded-lg transition-colors"
                             title="Entrada de stock"
                           >
                             +📦
                           </button>
                           <button
-                            onClick={() => setMovementModal({
-                              item, type: 'exit', quantity: '', notes: '',
-                            })}
+                            onClick={() => {
+                              setMovementError('')
+                              setMovementModal({
+                                item, type: 'exit', quantity: '', notes: '',
+                              })
+                            }}
                             className="p-1.5 text-xs bg-yellow-100 hover:bg-yellow-200 text-yellow-600 rounded-lg transition-colors"
                             title="Salida de stock"
                           >
@@ -220,6 +278,8 @@ export default function Stock() {
                 })}
               </tbody>
             </table>
+            </>
+            )}
           </div>
 
           {topRequested.length > 0 && (
@@ -341,6 +401,11 @@ export default function Stock() {
             <p className="text-sm text-gray-500 mb-4">
               Recurso: <strong>{movementModal.item.name}</strong> ({movementModal.item.current_quantity} {movementModal.item.unit} actuales)
             </p>
+            {movementError && (
+              <div className="bg-red-50 text-red-600 px-3 py-2 rounded-lg text-sm mb-3">
+                {movementError}
+              </div>
+            )}
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Cantidad</label>

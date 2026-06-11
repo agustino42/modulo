@@ -15,22 +15,58 @@ export default function Reports() {
   const [healthSummary, setHealthSummary] = useState<HealthSummary[]>([])
   const [tab, setTab] = useState<'usage' | 'audit' | 'health'>('usage')
   const [auditPage, setAuditPage] = useState(0)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const AUDIT_PAGE_SIZE = 50
 
   useEffect(() => {
     loadData()
   }, [])
 
-  const loadData = async () => {
+  const loadData = async (from?: string, to?: string) => {
     const [usage, audit, health] = await Promise.all([
-      window.electronAPI.db.reports.getUsageStats(),
-      window.electronAPI.db.reports.getAuditLogs(),
+      window.electronAPI.db.reports.getUsageStats(from, to),
+      window.electronAPI.db.reports.getAuditLogs(from, to),
       window.electronAPI.db.reports.getHealthSummary(),
     ])
     setUsageStats(usage)
     setAuditLogs(audit)
     setHealthSummary(health)
   }
+
+  const exportUsageCSV = useCallback(() => {
+    const rows = [['#', 'Recurso', 'Código QR', 'Veces usado', 'Total minutos']]
+    usageStats.forEach((s, i) => rows.push([String(i + 1), s.resource_name, s.qr_code, String(s.total_checkouts), String(s.total_minutes_used)]))
+    const csv = rows.map(r => r.join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'uso-recursos.csv'; a.click()
+    URL.revokeObjectURL(url)
+  }, [usageStats])
+
+  const exportAuditCSV = useCallback(() => {
+    const rows = [['Fecha', 'Usuario', 'Rol', 'Acción', 'Recurso', 'QR', 'ETR']]
+    auditLogs.forEach(l => rows.push([new Date(l.created_at).toLocaleString(), l.user_name, l.user_role, l.action === 'checkout' ? 'Tomó' : 'Devolvió', l.resource_name, l.qr_code, `${l.etr_minutes} min`]))
+    const csv = rows.map(r => r.join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'auditoria.csv'; a.click()
+    URL.revokeObjectURL(url)
+  }, [auditLogs])
+
+  const exportHealthCSV = useCallback(() => {
+    const labels: Record<string, string> = { excellent: 'Excelente', needs_review: 'Requiere Revisión', out_of_service: 'Fuera de Servicio' }
+    const rows = [['#', 'Estado', 'Cantidad']]
+    healthSummary.forEach((h, i) => rows.push([String(i + 1), labels[h.health_status] || h.health_status, String(h.count)]))
+    const csv = rows.map(r => r.join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'salud-activos.csv'; a.click()
+    URL.revokeObjectURL(url)
+  }, [healthSummary])
 
   const exportUsagePDF = useCallback(() => {
     const doc = new jsPDF()
@@ -104,7 +140,7 @@ export default function Reports() {
         <p className="text-gray-500 mt-1">Estadísticas de uso, logs y estado de salud</p>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
         {(['usage', 'audit', 'health'] as const).map((t) => (
           <button
             key={t}
@@ -118,18 +154,40 @@ export default function Reports() {
             {t === 'usage' ? 'Uso de Recursos' : t === 'audit' ? 'Logs de Auditoría' : 'Salud de Activos'}
           </button>
         ))}
+        {tab !== 'health' && (
+          <div className="flex items-center gap-2 ml-auto">
+            <label className="text-xs text-gray-500">Desde:</label>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+              className="px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+            <label className="text-xs text-gray-500">Hasta:</label>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+              className="px-2 py-1.5 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+            <button onClick={() => loadData(dateFrom || undefined, dateTo || undefined)}
+              className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+              Filtrar
+            </button>
+          </div>
+        )}
       </div>
 
       {tab === 'usage' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">Recursos Más Demandados</h2>
-            <button
-              onClick={exportUsagePDF}
-              className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-            >
-              Exportar PDF
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={exportUsageCSV}
+                className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+              >
+                Exportar CSV
+              </button>
+              <button
+                onClick={exportUsagePDF}
+                className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                Exportar PDF
+              </button>
+            </div>
           </div>
           {usageStats.length > 0 ? (
             <ResponsiveContainer width="100%" height={400}>
@@ -176,12 +234,20 @@ export default function Reports() {
               <h2 className="text-lg font-semibold text-gray-900">Registro Histórico de Actividad</h2>
               <p className="text-sm text-gray-500 mt-1">Últimas 500 interacciones</p>
             </div>
-            <button
-              onClick={exportAuditPDF}
-              className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-            >
-              Exportar PDF
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={exportAuditCSV}
+                className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+              >
+                Exportar CSV
+              </button>
+              <button
+                onClick={exportAuditPDF}
+                className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+              >
+                Exportar PDF
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -260,7 +326,13 @@ export default function Reports() {
 
       {tab === 'health' && (
         <div className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={exportHealthCSV}
+              className="px-3 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+            >
+              Exportar CSV
+            </button>
             <button
               onClick={exportHealthPDF}
               className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"

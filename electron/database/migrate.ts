@@ -133,11 +133,6 @@ function seedIfEmpty(db: ReturnType<typeof getDatabase>): void {
           'INSERT INTO consumable_stock (resource_id, current_quantity, min_threshold, unit) VALUES (?, ?, ?, ?)',
           [id, 25, 5, 'unidades']
         )
-      } else {
-        db.run(
-          'INSERT INTO consumable_stock (resource_id, current_quantity, min_threshold, unit) VALUES (?, ?, ?, ?)',
-          [id, 50, 10, 'unidades']
-        )
       }
     }
   }

@@ -31,9 +31,8 @@ export function checkout(resourceId: number, userId: number, etrMinutes: number)
     const stock = db.exec('SELECT current_quantity FROM consumable_stock WHERE resource_id = ?', [resourceId])
     if (stock.length > 0 && stock[0].values.length > 0) {
       const qty = stock[0].values[0][0] as number
-      if (qty > 0) {
-        updateStock(resourceId, qty - 1)
-      }
+      if (qty <= 0) return false
+      updateStock(resourceId, qty - 1)
     }
   }
 
