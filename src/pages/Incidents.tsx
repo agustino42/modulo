@@ -93,12 +93,12 @@ export default function Incidents() {
           <h1 className="text-2xl font-bold text-gray-900">Incidencias</h1>
           <p className="text-gray-500 mt-1">Reporte de fallas y estado de salud de los activos</p>
         </div>
-        <button
+        {/** <button
           onClick={() => setShowCreate(true)}
           className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
           + Reportar Incidencia
-        </button>
+        </button>*/}
       </div>
 
       <input
@@ -218,11 +218,10 @@ export default function Incidents() {
                     <button
                       key={s}
                       onClick={() => setForm({ ...form, severity: s })}
-                      className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
-                        form.severity === s
+                      className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${form.severity === s
                           ? 'bg-red-600 text-white border-red-600'
                           : 'bg-white text-gray-600 border-gray-300 hover:border-red-400'
-                      }`}
+                        }`}
                     >
                       {s === 'low' ? 'Baja' : s === 'medium' ? 'Media' : s === 'high' ? 'Alta' : 'Crítica'}
                     </button>
