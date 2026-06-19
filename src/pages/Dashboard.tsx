@@ -2,7 +2,23 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts'
+
+function CustomTooltip({ active, payload, label }: any) {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white shadow-lg border border-gray-100 rounded-lg p-3">
+        <p className="font-semibold text-gray-900 text-sm">{label}</p>
+        <p className="text-blue-600 text-sm font-medium mt-1">
+          {payload[0].value} {payload[0].value === 1 ? 'vez' : 'veces'} usado
+        </p>
+      </div>
+    )
+  }
+  return null
+}
 
 export default function Dashboard() {
   const { dashboardStats, loadDashboard } = useAppStore()
@@ -55,7 +71,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Panel de Control</h1>
         <p className="text-gray-500 mt-1">Bienvenido, {user?.name}</p>
       </div>
 
@@ -80,12 +96,33 @@ export default function Dashboard() {
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Recursos Más Usados</h2>
           {topUsed.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={topUsed}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="resource_name" tick={{ fontSize: 12 }} />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="total_checkouts" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <BarChart data={topUsed} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                <defs>
+                  <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={1} />
+                    <stop offset="100%" stopColor="#1d4ed8" stopOpacity={0.6} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                <XAxis
+                  dataKey="resource_name"
+                  tick={{ fontSize: 12 }}
+                  axisLine={{ stroke: '#e5e7eb' }}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                  label={{
+                    value: 'Veces usado',
+                    angle: -90,
+                    position: 'insideLeft',
+                    style: { fontSize: 12, fill: '#9ca3af' },
+                  }}
+                />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f0f0f0' }} />
+                <Bar dataKey="total_checkouts" fill="url(#barGradient)" radius={[6, 6, 0, 0]} maxBarSize={50} />
               </BarChart>
             </ResponsiveContainer>
           ) : (

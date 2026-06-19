@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
@@ -29,6 +29,7 @@ export default function Stock() {
     notes: string
   } | null>(null)
   const [movementError, setMovementError] = useState('')
+  const prevLowCount = useRef(0)
 
   const loadData = async () => {
     const [allStock, low, allAlerts, counts] = await Promise.all([
@@ -41,9 +42,10 @@ export default function Stock() {
     setLowStock(low)
     setAlerts(allAlerts)
     setRestockCounts(counts)
-    if (low.length > 0) {
+    if (low.length > 0 && low.length !== prevLowCount.current) {
       window.electronAPI.db.notify('Stock Bajo', `${low.length} recurso(s) necesitan reposición`)
     }
+    prevLowCount.current = low.length
   }
 
   useEffect(() => {
@@ -165,8 +167,9 @@ export default function Stock() {
             />
             <button
               onClick={() => {
+                const esc = (v: string) => v.includes(',') || v.includes('"') || v.includes('\n') ? `"${v.replace(/"/g, '""')}"` : v
                 const rows = [['Recurso', 'Categoría', 'Stock', 'Mín.', 'Unidad']]
-                stockItems.forEach(item => rows.push([item.name, item.category, String(item.current_quantity), String(item.min_threshold), item.unit]))
+                stockItems.forEach(item => rows.push([esc(item.name), esc(item.category), String(item.current_quantity), String(item.min_threshold), esc(item.unit)]))
                 const csv = rows.map(r => r.join(',')).join('\n')
                 const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
                 const url = URL.createObjectURL(blob)
@@ -233,7 +236,7 @@ export default function Stock() {
                       <td className="px-4 py-3 text-sm text-gray-500">
                         {new Date(item.created_at).toLocaleDateString()}
                       </td>
-                      {/** <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => {
@@ -273,7 +276,6 @@ export default function Stock() {
                           )}
                         </div>
                       </td>
-                      */}
                     </tr>
                   )
                 })}

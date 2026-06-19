@@ -109,22 +109,33 @@ export function getAllStock(): (ConsumableStockRow & { name: string; qr_code: st
 export function registerMovement(resourceId: number, quantityChange: number, type: 'entry' | 'exit', notes: string, userId: number): boolean {
   const db = getDatabase()
   if (quantityChange <= 0) return false
+
+  const stockRow = db.exec('SELECT current_quantity FROM consumable_stock WHERE resource_id = ?', [resourceId])
+  if (!stockRow[0]?.values?.length) return false
+
   if (type === 'exit') {
-    const current = db.exec('SELECT current_quantity FROM consumable_stock WHERE resource_id = ?', [resourceId])
-    const qty = current[0]?.values[0]?.[0] as number ?? 0
+    const qty = stockRow[0].values[0][0] as number
     if (qty < quantityChange) return false
   }
-  db.run(
-    'INSERT INTO stock_movements (resource_id, quantity_change, type, notes, user_id) VALUES (?, ?, ?, ?, ?)',
-    [resourceId, quantityChange, type, notes, userId],
-  )
-  const sign = type === 'entry' ? 1 : -1
-  db.run(
-    'UPDATE consumable_stock SET current_quantity = current_quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE resource_id = ?',
-    [sign * quantityChange, resourceId],
-  )
-  saveDatabase()
-  return true
+
+  try {
+    db.run('BEGIN')
+    db.run(
+      'INSERT INTO stock_movements (resource_id, quantity_change, type, notes, user_id) VALUES (?, ?, ?, ?, ?)',
+      [resourceId, quantityChange, type, notes, userId],
+    )
+    const sign = type === 'entry' ? 1 : -1
+    db.run(
+      'UPDATE consumable_stock SET current_quantity = current_quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE resource_id = ?',
+      [sign * quantityChange, resourceId],
+    )
+    db.run('COMMIT')
+    saveDatabase()
+    return true
+  } catch {
+    db.run('ROLLBACK')
+    return false
+  }
 }
 
 export function getStockMovements(resourceId?: number): (StockMovementRow & { user_name: string; resource_name: string })[] {
@@ -250,9 +261,11 @@ export function updateAlertStatus(id: number, status: string, approvedBy: number
     const alert = db.exec('SELECT resource_id FROM restock_alerts WHERE id = ?', [id])
     if (alert.length > 0 && alert[0].values.length > 0) {
       const resourceId = alert[0].values[0][0] as number
+      const stock = db.exec('SELECT min_threshold FROM consumable_stock WHERE resource_id = ?', [resourceId])
+      const threshold = stock[0]?.values[0]?.[0] as number ?? 10
       db.run(
-        'UPDATE consumable_stock SET current_quantity = current_quantity + 50, updated_at = CURRENT_TIMESTAMP WHERE resource_id = ?',
-        [resourceId],
+        'UPDATE consumable_stock SET current_quantity = current_quantity + ?, updated_at = CURRENT_TIMESTAMP WHERE resource_id = ?',
+        [threshold, resourceId],
       )
     }
   }
