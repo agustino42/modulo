@@ -233,7 +233,7 @@ export default function Stock() {
                       <td className="px-4 py-3 text-sm text-gray-500">
                         {new Date(item.created_at).toLocaleDateString()}
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      {/** <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => {
@@ -273,6 +273,7 @@ export default function Stock() {
                           )}
                         </div>
                       </td>
+                      */}
                     </tr>
                   )
                 })}
