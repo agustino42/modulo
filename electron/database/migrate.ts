@@ -10,9 +10,11 @@ export function runMigrations(): void {
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       role TEXT CHECK(role IN ('admin','user')) DEFAULT 'user',
+      status TEXT CHECK(status IN ('pending','active','rejected')) DEFAULT 'active',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `)
+  try { db.run("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'") } catch {}
 
   db.run(`
     CREATE TABLE IF NOT EXISTS resources (

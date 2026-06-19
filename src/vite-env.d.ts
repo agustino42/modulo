@@ -14,6 +14,13 @@ interface ElectronAPI {
       getAll: () => Promise<any[]>
       create: (data: any) => Promise<any>
       update: (id: number, data: any) => Promise<boolean>
+      register: (data: { name: string; email: string; password: string }) => Promise<any>
+      getPending: () => Promise<any[]>
+      approve: (id: number) => Promise<boolean>
+      reject: (id: number) => Promise<boolean>
+      delete: (id: number) => Promise<{ success: boolean; error?: string }>
+      getInactive: () => Promise<any[]>
+      restore: (id: number) => Promise<boolean>
     }
     checkInOut: {
       checkout: (resourceId: number, userId: number, etrMinutes: number) => Promise<boolean>

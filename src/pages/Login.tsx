@@ -1,5 +1,5 @@
 import { useState, FormEvent, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useTheme } from '../context/ThemeContext'
 
@@ -30,12 +30,12 @@ export default function Login() {
       return
     }
     setLoading(true)
-    const success = await login(email, password)
+    const result = await login(email, password)
     setLoading(false)
-    if (success) {
+    if (result.success) {
       navigate('/dashboard', { replace: true })
     } else {
-      setError('Credenciales inválidas')
+      setError(result.error || 'Credenciales inválidas')
     }
   }
 
@@ -202,7 +202,10 @@ export default function Login() {
                   ))}
                 </div>
                 <p className="text-xs text-center mt-3" style={{ color: 'var(--text-secondary)' }}>
-                  Los usuarios son creados por el administrador del sistema
+                  ¿No tienes cuenta?{' '}
+                  <Link to="/register" className="text-blue-600 hover:underline font-medium">
+                    Regístrate aquí
+                  </Link>
                 </p>
               </div>
             </div>

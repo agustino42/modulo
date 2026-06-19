@@ -3,6 +3,7 @@ export interface User {
   name: string
   email: string
   role: 'admin' | 'user'
+  status: 'pending' | 'active' | 'rejected'
   created_at: string
 }
 

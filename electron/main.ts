@@ -53,6 +53,33 @@ function registerIpcHandlers() {
     userRepo.updateUser(id, data)
     return true
   })
+  ipcMain.handle('db:users:register', (_e, data: { name: string; email: string; password: string }) => {
+    const user = userRepo.registerUser(data.name, data.email, data.password)
+    if (Notification.isSupported()) {
+      new Notification({
+        title: 'Nuevo registro de usuario',
+        body: `${data.name} (${data.email}) se ha registrado. Revisa las solicitudes pendientes.`,
+      }).show()
+    }
+    return user
+  })
+  ipcMain.handle('db:users:getPending', () => userRepo.getPendingUsers())
+  ipcMain.handle('db:users:approve', (_e, id: number) => {
+    userRepo.approveUser(id)
+    return true
+  })
+  ipcMain.handle('db:users:reject', (_e, id: number) => {
+    userRepo.rejectUser(id)
+    return true
+  })
+  ipcMain.handle('db:users:delete', (_e, id: number) => {
+    return userRepo.deleteUser(id)
+  })
+  ipcMain.handle('db:users:getInactive', () => userRepo.getInactiveUsers())
+  ipcMain.handle('db:users:restore', (_e, id: number) => {
+    userRepo.restoreUser(id)
+    return true
+  })
 
   // Resources
   ipcMain.handle('db:resources:getAll', () => resourceRepo.getAllResources())

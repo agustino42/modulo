@@ -14,6 +14,13 @@ const api = {
       getAll: () => ipcRenderer.invoke('db:users:getAll'),
       create: (data: any) => ipcRenderer.invoke('db:users:create', data),
       update: (id: number, data: any) => ipcRenderer.invoke('db:users:update', id, data),
+      register: (data: { name: string; email: string; password: string }) => ipcRenderer.invoke('db:users:register', data),
+      getPending: () => ipcRenderer.invoke('db:users:getPending'),
+      approve: (id: number) => ipcRenderer.invoke('db:users:approve', id),
+      reject: (id: number) => ipcRenderer.invoke('db:users:reject', id),
+      delete: (id: number) => ipcRenderer.invoke('db:users:delete', id),
+      getInactive: () => ipcRenderer.invoke('db:users:getInactive'),
+      restore: (id: number) => ipcRenderer.invoke('db:users:restore', id),
     },
     checkInOut: {
       checkout: (resourceId: number, userId: number, etrMinutes: number) =>

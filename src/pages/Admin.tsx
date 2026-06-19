@@ -5,19 +5,38 @@ import type { User } from '../types'
 export default function Admin() {
   const { user: currentUser } = useAuthStore()
   const [users, setUsers] = useState<User[]>([])
+  const [pendingUsers, setPendingUsers] = useState<User[]>([])
+  const [inactiveUsers, setInactiveUsers] = useState<User[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'user' as 'admin' | 'user' })
   const [passwordModal, setPasswordModal] = useState<{ user: User } | null>(null)
   const [newPassword, setNewPassword] = useState('')
 
   const loadUsers = async () => {
-    const data = await window.electronAPI.db.users.getAll()
-    setUsers(data)
+    const [all, pending, inactive] = await Promise.all([
+      window.electronAPI.db.users.getAll(),
+      window.electronAPI.db.users.getPending(),
+      window.electronAPI.db.users.getInactive(),
+    ])
+    setUsers(all)
+    setPendingUsers(pending)
+    setInactiveUsers(inactive)
   }
 
   useEffect(() => {
     loadUsers()
   }, [])
+
+  const handleApprove = async (id: number) => {
+    await window.electronAPI.db.users.approve(id)
+    await loadUsers()
+  }
+
+  const handleReject = async (id: number) => {
+    if (!confirm('¿Rechazar este usuario? No podrá iniciar sesión.')) return
+    await window.electronAPI.db.users.reject(id)
+    await loadUsers()
+  }
 
   const handleCreate = async () => {
     if (!form.name || !form.email || !form.password) return
@@ -38,6 +57,25 @@ export default function Admin() {
     await window.electronAPI.db.users.update(passwordModal.user.id, { password: newPassword })
     setPasswordModal(null)
     setNewPassword('')
+  }
+
+  const handleDeleteUser = async (id: number) => {
+    if (id === currentUser?.id) {
+      alert('No puedes darte de baja a ti mismo')
+      return
+    }
+    if (!confirm('¿Dar de baja este usuario? Podrás restaurarlo después.')) return
+    const result = await window.electronAPI.db.users.delete(id)
+    if (!result.success) {
+      alert(result.error || 'No se pudo dar de baja al usuario')
+    }
+    await loadUsers()
+  }
+
+  const handleRestoreUser = async (id: number) => {
+    if (!confirm('¿Restaurar este usuario? Podrá iniciar sesión nuevamente.')) return
+    await window.electronAPI.db.users.restore(id)
+    await loadUsers()
   }
 
   const handleBackup = async () => {
@@ -61,15 +99,58 @@ export default function Admin() {
           <h1 className="text-2xl font-bold text-gray-900">Administración</h1>
           <p className="text-gray-500 mt-1">Gestión de usuarios del sistema</p>
         </div>
-        <button
+       {/**  <button
           onClick={() => setShowCreate(true)}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
         >
           + Nuevo Usuario
         </button>
+        */}
       </div>
 
+      {pendingUsers.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-amber-200 overflow-hidden">
+          <div className="bg-amber-50 px-4 py-3 border-b border-amber-200 flex items-center gap-2">
+            <span className="text-lg">⏳</span>
+            <h2 className="font-semibold text-amber-800">Solicitudes Pendientes ({pendingUsers.length})</h2>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {pendingUsers.map((u) => (
+              <div key={u.id} className="flex items-center justify-between px-4 py-3 hover:bg-amber-50/50">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 font-bold">
+                    {u.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 text-sm">{u.name}</p>
+                    <p className="text-sm text-gray-500">{u.email}</p>
+                    <p className="text-xs text-gray-400">{new Date(u.created_at).toLocaleString()}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleApprove(u.id)}
+                    className="px-4 py-1.5 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
+                  >
+                    Aprobar
+                  </button>
+                  <button
+                    onClick={() => handleReject(u.id)}
+                    className="px-4 py-1.5 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors font-medium"
+                  >
+                    Rechazar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100">
+          <h2 className="font-semibold text-gray-900">Usuarios del Sistema</h2>
+        </div>
         <table className="w-full">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
@@ -81,7 +162,7 @@ export default function Admin() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {users.map((u) => (
+            {users.filter(u => u.status === 'active').map((u) => (
               <tr key={u.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 font-medium text-gray-900">{u.name}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">{u.email}</td>
@@ -94,6 +175,11 @@ export default function Admin() {
                     <option value="user">Usuario</option>
                     <option value="admin">Admin</option>
                   </select>
+                  <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
+                    u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {u.role === 'admin' ? 'Admin' : 'User'}
+                  </span>
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-500">
                   {new Date(u.created_at).toLocaleDateString()}
@@ -106,11 +192,12 @@ export default function Admin() {
                     >
                       Contraseña
                     </button>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {u.role === 'admin' ? 'Administrador' : 'Usuario'}
-                    </span>
+                    <button
+                      onClick={() => handleDeleteUser(u.id)}
+                      className="px-3 py-1.5 text-xs bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors"
+                    >
+                      Dar de Baja
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -119,10 +206,41 @@ export default function Admin() {
         </table>
       </div>
 
+      {inactiveUsers.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center gap-2">
+            <span className="text-lg">📂</span>
+            <h2 className="font-semibold text-gray-700">Usuarios Inactivos ({inactiveUsers.length})</h2>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {inactiveUsers.map((u) => (
+              <div key={u.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 font-bold">
+                    {u.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 text-sm">{u.name}</p>
+                    <p className="text-sm text-gray-500">{u.email}</p>
+                    <p className="text-xs text-gray-400">Dado de baja el {new Date(u.created_at).toLocaleDateString()}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleRestoreUser(u.id)}
+                  className="px-4 py-1.5 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors font-medium"
+                >
+                  Restaurar
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold mb-4">Nuevo Usuario</h2>
+         <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
+             <h2 className="text-lg font-semibold mb-4">Nuevo Usuario</h2>
             <div className="space-y-3">
               <input
                 placeholder="Nombre"
@@ -169,6 +287,8 @@ export default function Admin() {
             </div>
           </div>
         </div>
+        
+        
       )}
 
       {passwordModal && (
