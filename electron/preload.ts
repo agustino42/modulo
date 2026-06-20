@@ -30,8 +30,11 @@ const api = {
     },
     incidents: {
       getAll: () => ipcRenderer.invoke('db:incidents:getAll'),
+      getById: (id: number) => ipcRenderer.invoke('db:incidents:getById', id),
       create: (data: any) => ipcRenderer.invoke('db:incidents:create', data),
+      update: (id: number, data: any) => ipcRenderer.invoke('db:incidents:update', id, data),
       updateStatus: (id: number, status: string) => ipcRenderer.invoke('db:incidents:updateStatus', id, status),
+      delete: (id: number) => ipcRenderer.invoke('db:incidents:delete', id),
     },
     stock: {
       getAlerts: () => ipcRenderer.invoke('db:stock:getAlerts'),

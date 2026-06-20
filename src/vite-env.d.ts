@@ -29,8 +29,11 @@ interface ElectronAPI {
     }
     incidents: {
       getAll: () => Promise<any[]>
+      getById: (id: number) => Promise<any>
       create: (data: any) => Promise<any>
+      update: (id: number, data: any) => Promise<boolean>
       updateStatus: (id: number, status: string) => Promise<boolean>
+      delete: (id: number) => Promise<boolean>
     }
     stock: {
       getAlerts: () => Promise<any[]>

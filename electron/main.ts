@@ -107,11 +107,20 @@ function registerIpcHandlers() {
 
   // Incidents
   ipcMain.handle('db:incidents:getAll', () => incidentRepo.getAllIncidents())
+  ipcMain.handle('db:incidents:getById', (_e, id: number) => incidentRepo.getIncidentById(id))
   ipcMain.handle('db:incidents:create', (_e, data) => {
     return incidentRepo.createIncident(data.resource_id, data.reported_by, data.description, data.severity)
   })
+  ipcMain.handle('db:incidents:update', (_e, id: number, data) => {
+    incidentRepo.updateIncident(id, data.description, data.severity)
+    return true
+  })
   ipcMain.handle('db:incidents:updateStatus', (_e, id: number, status: string) => {
     incidentRepo.updateIncidentStatus(id, status)
+    return true
+  })
+  ipcMain.handle('db:incidents:delete', (_e, id: number) => {
+    incidentRepo.deleteIncident(id)
     return true
   })
 
