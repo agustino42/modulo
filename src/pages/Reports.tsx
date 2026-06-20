@@ -361,8 +361,8 @@ export default function Reports() {
                       <Cell key={index} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip />
-                  <Legend />
+                  <Tooltip formatter={(value, name) => [value, name === 'count' ? 'Cantidad' : '']} />
+                  <Legend formatter={(value) => value === 'excellent' ? 'Excelente' : value === 'needs_review' ? 'Requiere Revisión' : 'Fuera de Servicio'} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (

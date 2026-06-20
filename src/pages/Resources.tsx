@@ -142,7 +142,7 @@ export default function Resources() {
     }
     return (
       <span className={`px-2 py-0.5 text-xs rounded-full ${colors[status] || ''}`}>
-        {status === 'excellent' ? 'Excelente' : status === 'needs_review' ? 'Requiere Revisión' : 'Fuera de Servicio'}
+        {status === '' ? 'Excelente' : status === 'needs_review' ? 'Requiere Revisión' : 'Fuera de Servicio'}
       </span>
     )
   }
