@@ -24,7 +24,7 @@ function rowToUser(row: any[]): Omit<UserRow, 'password_hash'> {
 
 export function authenticateUser(email: string, password: string): Omit<UserRow, 'password_hash'> | null {
   const db = getDatabase()
-  const result = db.exec('SELECT * FROM users WHERE email = ?', [email])
+  const result = db.exec('SELECT id, name, email, password_hash, role, status, created_at FROM users WHERE email = ?', [email])
 
   if (result.length === 0 || result[0].values.length === 0) return null
 
